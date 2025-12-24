@@ -6,6 +6,8 @@ import { CameraRig } from './components/CameraRig';
 import { MemoryGallery } from './components/MemoryGallery';
 import { DenseStarField } from './components/DenseStarField';
 
+import { MagicalSky } from './components/MagicalSky';
+
 // === 1. CẤU HÌNH NHẠC ===
 
 // A. Nhạc nền trang bìa (Intro) - Chỉ 1 bài
@@ -179,6 +181,7 @@ export default function App() {
           {/* Lưu ý: Camera Z=60 để thấy trái tim */}
           <Canvas camera={{ position: [0, 0, 60], fov: 45 }} dpr={[1, 2]}>
             <DenseStarField handData={handData} />
+            <MagicalSky />
             <CelestialScene handData={handData} />
             <MemoryGallery handData={handData} memories={MEMORIES} />
             <CameraRig handData={handData} />
