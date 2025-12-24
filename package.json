@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@mediapipe/camera_utils": "0.3.1675466862",
-    "@mediapipe/hands": "0.4.1675469240",
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/hands": "^0.4.1675469240",
     "@react-three/drei": "9.92.7",
     "@react-three/fiber": "8.15.11",
     "@react-three/postprocessing": "2.15.11",
