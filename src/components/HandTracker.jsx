@@ -1,31 +1,37 @@
 import { useRef, useEffect } from 'react';
-import { Hands } from '@mediapipe/hands';
-import * as cam from '@mediapipe/camera_utils';
-
-// KHÔNG import useFrame hay useThree ở đây nữa!
+// QUAN TRỌNG: Đã xóa các dòng import @mediapipe... đi vì ta dùng CDN
 
 export const HandTracker = ({ onUpdate }) => {
   const videoRef = useRef(null);
   const lastState = useRef('FIST'); 
 
   useEffect(() => {
-    // 1. Cấu hình MediaPipe (Giữ nguyên logic của bạn)
-    const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+    // Kiểm tra xem thư viện đã tải xong chưa
+    if (!window.Hands || !window.Camera) {
+      console.error("MediaPipe chưa tải xong. Hãy kiểm tra lại file index.html");
+      return;
+    }
+
+    // 1. Dùng window.Hands thay vì new Hands()
+    const hands = new window.Hands({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      }
     });
 
     hands.setOptions({
       maxNumHands: 1,
       modelComplexity: 1,
-      minDetectionConfidence: 0.7, // Giảm nhẹ cho nhạy
+      minDetectionConfidence: 0.7,
       minTrackingConfidence: 0.7,
     });
 
-    // 2. Xử lý kết quả (Giữ nguyên logic ngón tay của bạn)
+    // 2. Xử lý kết quả (Logic giữ nguyên)
     hands.onResults((results) => {
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const lm = results.multiHandLandmarks[0];
 
+        // Logic đếm ngón
         const isIndexOpen = lm[8].y < lm[6].y;
         const isMiddleOpen = lm[12].y < lm[10].y;
         const isRingOpen = lm[16].y < lm[14].y;
@@ -46,8 +52,8 @@ export const HandTracker = ({ onUpdate }) => {
 
         onUpdate({
           pos: { 
-            x: (lm[9].x - 0.5) * 2, 
-            y: -(lm[9].y - 0.5) * 2 
+            x: (lm[9].x - 0.5) * 3, 
+            y: -(lm[9].y - 0.5) * 3 
           },
           state: stateToSend,
           pinchDist: pinchDist,
@@ -64,30 +70,26 @@ export const HandTracker = ({ onUpdate }) => {
       }
     });
 
-    // 3. Khởi tạo Camera (QUAN TRỌNG: Thêm playsInline cho iPhone)
+    // 3. Khởi tạo Camera bằng window.Camera
     if (videoRef.current) {
-        const camera = new cam.Camera(videoRef.current, {
+        const camera = new window.Camera(videoRef.current, {
             onFrame: async () => {
-                // Kiểm tra video còn tồn tại không trước khi gửi
                 if (videoRef.current) {
                     await hands.send({ image: videoRef.current });
                 }
             },
-            width: 640, height: 480,
+            width: 640,
+            height: 480,
         });
         camera.start();
     }
 
-    // Cleanup không cần thiết lắm với camera utils này, 
-    // nhưng React sẽ tự hủy videoRef khi unmount
   }, [onUpdate]);
 
   return (
     <video 
       ref={videoRef} 
       className="w-full h-full object-cover scale-x-[-1]" 
-      // QUAN TRỌNG: Phải có 3 thuộc tính này để chạy trên Safari/iPhone
-      autoPlay 
       playsInline 
       muted
     />
