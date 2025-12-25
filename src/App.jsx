@@ -19,7 +19,6 @@ const MAIN_PLAYLIST = [
   '/music/song2.mp3',
   '/music/song3.mp3',
   '/music/song4.mp3',
-
 ];
 
 // === 2. CẤU HÌNH DỮ LIỆU KỶ NIỆM ===
@@ -57,6 +56,9 @@ export default function App() {
   // 1: Đang ở Bìa (Phát nhạc Intro)
   // 2: Đang xem Cây thông (Phát Playlist)
   const [stage, setStage] = useState(0);
+
+  // --- [MỚI] State theo dõi xem có đang ở gần video nào không ---
+  const [isNearAnyVideo, setIsNearAnyVideo] = useState(false);
 
   // Refs quản lý Audio
   const introAudioRef = useRef(null);
@@ -121,6 +123,30 @@ export default function App() {
     };
   }, []);
 
+  // --- [MỚI] LOGIC XỬ LÝ ÂM THANH KHI GẦN VIDEO (Audio Ducking) ---
+  useEffect(() => {
+    const bgm = playlistAudioRef.current;
+    if (!bgm) return;
+
+    if (isNearAnyVideo) {
+      // 1. Nếu đang gần video -> Giảm nhạc nền còn 10%
+      bgm.volume = 0.1; 
+      
+      // 2. Force Resume: Nếu iPhone tự tắt nhạc nền -> Ép chạy lại
+      if (bgm.paused) {
+          bgm.play().catch(e => console.log("Force resume bgm:", e));
+      }
+    } else {
+      // 1. Nếu đi xa -> Tăng nhạc nền lên lại 50%
+      bgm.volume = 0.5;
+      
+      // 2. Đảm bảo nhạc vẫn chạy
+      if (bgm.paused) {
+        bgm.play().catch(e => console.log("Resume bgm:", e));
+      }
+    }
+  }, [isNearAnyVideo]); // Chạy lại mỗi khi trạng thái Gần/Xa thay đổi
+
   return (
     <div className="w-full h-screen bg-[#00050a] relative overflow-hidden font-serif">
 
@@ -137,7 +163,6 @@ export default function App() {
         </div>
       )}
 
-      {/* === UI GIAI ĐOẠN 1: TRANG BÌA (COVER) - CÓ NHẠC INTRO === */}
       {/* === UI GIAI ĐOẠN 1: TRANG BÌA (COVER) === */}
       {stage === 1 && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/95 text-yellow-500 transition-opacity duration-1000">
@@ -183,7 +208,14 @@ export default function App() {
             <DenseStarField handData={handData} />
             <MagicalSky />
             <CelestialScene handData={handData} />
-            <MemoryGallery handData={handData} memories={MEMORIES} />
+            
+            {/* [MỚI] Truyền hàm nhận diện khoảng cách vào đây */}
+            <MemoryGallery 
+                handData={handData} 
+                memories={MEMORIES} 
+                onProximityChange={setIsNearAnyVideo} 
+            />
+            
             <CameraRig handData={handData} />
           </Canvas>
       </div>
