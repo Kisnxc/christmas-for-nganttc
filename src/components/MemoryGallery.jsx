@@ -1,28 +1,54 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame, useLoader } from '@react-three/fiber';
 import { useVideoTexture } from '@react-three/drei';
 import * as THREE from 'three';
 
 // =========================================================
-// CẤU HÌNH MÀU SẮC (GIỮ NGUYÊN CỦA BẠN)
+// CẤU HÌNH MÀU SẮC (GIỮ NGUYÊN)
 // =========================================================
 const TINT_COLOR = "#b0b0b0"; 
 const BORDER_COLOR = "#d4d4d4"; 
 const BORDER_SIZE = 0.15;
 
 // ==========================================
-// 1. COMPONENT HIỂN THỊ VIDEO (CÓ SỬA ĐỔI)
+// 1. COMPONENT HIỂN THỊ VIDEO (VÁ LỖI IOS)
 // ==========================================
-// Thêm prop: onProximityChange để báo về App
 const VideoContent = ({ url, onProximityChange }) => {
   const meshRef = useRef();
-  
-  // [MỚI] Biến lưu trạng thái cũ để tránh spam tín hiệu liên tục
   const wasNearRef = useRef(false);
 
-  const texture = useVideoTexture(url, { muted: true, loop: true, start: true, playsInline: true });
+  // Cấu hình texture
+  const texture = useVideoTexture(url, { 
+    muted: true,    // Bắt buộc muted mới tự chạy được trên iOS
+    loop: true, 
+    start: true, 
+    playsInline: true, // Chống phóng to
+    crossOrigin: 'Anonymous' 
+  });
+
+  // --- [ĐOẠN CODE FIX LỖI IPHONE] ---
+  useEffect(() => {
+    const video = texture.image;
+    if (video) {
+        // 1. Ép lại thuộc tính playsInline trực tiếp vào thẻ HTML
+        video.setAttribute('playsinline', 'true');
+        video.setAttribute('webkit-playsinline', 'true');
+        
+        // 2. Đảm bảo nó tắt tiếng ban đầu
+        video.muted = true;
+
+        // 3. Ép chạy thủ công (Force Play)
+        const attemptPlay = () => {
+            video.play().catch(e => console.log("iOS loading...", e));
+        };
+        attemptPlay();
+    }
+  }, [texture]); // Chạy ngay khi texture tải xong
+  // ------------------------------------
+
   const { width, height } = useMemo(() => {
     const video = texture.image;
+    // Fallback kích thước chuẩn 16:9 nếu chưa load kịp
     const vidW = video?.videoWidth || 16;
     const vidH = video?.videoHeight || 9;
     const aspect = vidW / vidH;
@@ -38,23 +64,19 @@ const VideoContent = ({ url, onProximityChange }) => {
     meshRef.current.getWorldPosition(worldPos);
     
     const distance = camera.position.distanceTo(worldPos);
-
-    // --- [ĐOẠN CODE MỚI THÊM VÀO] ---
-    // Kiểm tra xem có đang ở gần (< 20m) hay không
     const isNear = distance < 20;
 
-    // Chỉ khi nào trạng thái thay đổi (đang Xa -> Gần hoặc ngược lại) thì mới báo
+    // Báo cho App biết
     if (isNear !== wasNearRef.current) {
         wasNearRef.current = isNear;
-        // Gọi hàm báo tin cho App.jsx
-        if (onProximityChange) {
-            onProximityChange(isNear);
-        }
+        if (onProximityChange) onProximityChange(isNear);
     }
-    // -------------------------------
 
-    // Logic âm thanh video (Giữ nguyên của bạn)
-    if (distance < 20) {
+    // Logic âm thanh
+    if (isNear) {
+      // Chỉ bật tiếng khi video đã thực sự sẵn sàng
+      // Lưu ý: Trên iOS, nếu người dùng chưa chạm vào màn hình (interact), dòng này có thể fail
+      // Nhưng vì ta đã có nút "Mở quà" ở đầu, nên audio context đã được mở -> OK
       videoEl.muted = false;
       let volume = 1 - (distance / 15);
       videoEl.volume = THREE.MathUtils.clamp(volume, 0, 1);
@@ -65,13 +87,10 @@ const VideoContent = ({ url, onProximityChange }) => {
 
   return (
     <group>
-      {/* LỚP VIỀN */}
       <mesh position={[0, 0, -0.01]}>
         <planeGeometry args={[width + BORDER_SIZE, height + BORDER_SIZE]} />
         <meshBasicMaterial color={BORDER_COLOR} /> 
       </mesh>
-
-      {/* LỚP VIDEO */}
       <mesh ref={meshRef}>
         <planeGeometry args={[width, height]} />
         <meshBasicMaterial 
@@ -86,7 +105,7 @@ const VideoContent = ({ url, onProximityChange }) => {
 };
 
 // ==========================================
-// 2. COMPONENT HIỂN THỊ ẢNH (GIỮ NGUYÊN)
+// 2. CÁC COMPONENT KHÁC (GIỮ NGUYÊN 100%)
 // ==========================================
 const ImageContent = ({ url }) => {
   const texture = useLoader(THREE.TextureLoader, url);
@@ -106,23 +125,14 @@ const ImageContent = ({ url }) => {
       </mesh>
       <mesh>
         <planeGeometry args={[width, height]} />
-        <meshBasicMaterial 
-          map={texture} 
-          side={THREE.DoubleSide} 
-          color={TINT_COLOR} 
-          toneMapped={true} 
-        />
+        <meshBasicMaterial map={texture} side={THREE.DoubleSide} color={TINT_COLOR} toneMapped={true} />
       </mesh>
     </group>
   );
 };
 
-// ==========================================
-// 3. CÁC COMPONENT TRUNG GIAN (TRUYỀN PROP XUỐNG)
-// ==========================================
 const MediaContent = ({ item, onProximityChange }) => {
   if (item.type === 'video') {
-    // Truyền tiếp onProximityChange vào Video
     return <VideoContent url={item.url} onProximityChange={onProximityChange} />;
   }
   return <ImageContent url={item.url} />;
@@ -150,16 +160,11 @@ const PhotoFrame = ({ item, targetPos, handData, onProximityChange }) => {
 
   return (
     <group ref={groupRef}>
-      {/* Truyền tiếp onProximityChange vào MediaContent */}
       <MediaContent item={item} onProximityChange={onProximityChange} />
     </group>
   );
 };
 
-// ==========================================
-// 4. COMPONENT CHÍNH (NHẬN PROP TỪ APP)
-// ==========================================
-// Thêm prop onProximityChange ở đây để nhận hàm từ App.jsx
 export const MemoryGallery = ({ handData, memories, onProximityChange }) => {
   const positions = useMemo(() => {
     return memories.map((_, i) => {
@@ -168,7 +173,10 @@ export const MemoryGallery = ({ handData, memories, onProximityChange }) => {
       const angle = (i / count) * Math.PI * 2; 
       const x = Math.cos(angle) * radius;
       const z = Math.sin(angle) * radius;
-      const y = Math.sin(i * 132) * 2.5; // Giữ nguyên công thức vị trí của bạn
+      
+      // SỬA LẠI THÀNH HÌNH TRÒN PHẲNG (Y=0) CHO BẠN
+      const y = 0; 
+      
       return new THREE.Vector3(x, y, z);
     });
   }, [memories]);
@@ -181,7 +189,6 @@ export const MemoryGallery = ({ handData, memories, onProximityChange }) => {
             item={item} 
             targetPos={positions[i]} 
             handData={handData} 
-            // Truyền hàm này xuống các lớp dưới
             onProximityChange={onProximityChange}
         />
       ))}
